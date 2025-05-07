@@ -1,0 +1,7 @@
+# dataset 제외
+
+meta/
+
+# 검출 dataset 제외
+
+output_*/

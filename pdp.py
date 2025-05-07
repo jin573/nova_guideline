@@ -178,6 +178,9 @@ def detect_pdp(video_path, save_path, threshold=0.2, area_ratio=0.1, min_flicker
 
 def main():
     # 영상 파일 경로
+    """
+    video_path를 수정하게 되면 detect_pdp의 두 번째 매개변수도 변경
+    """
     video_path = r"C:\kimjs\nova_guideline\meta\17_flickering_light.mp4"  # 경로 지정
     detect_pdp(video_path, "output_flickering_light")
 
