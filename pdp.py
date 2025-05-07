@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+import csv
 
 # 휘도 계산 함수 (상대 휘도 계산)
 def calculate_luminance(frame):
@@ -105,7 +106,7 @@ def save_flicker_clip(video_path, clip_ranges, save_path, width, height, fps):
     cap.release()
 
 # 메인 함수
-def detect_pdp(video_path, save_path="output_clips", threshold=0.2, area_ratio=0.1, min_flicker_hz=3, max_flicker_hz=50):
+def detect_pdp(video_path, save_path, threshold=0.2, area_ratio=0.1, min_flicker_hz=3, max_flicker_hz=50):
     """
     PDP 기준을 만족하는 깜빡임 구간을 검출하여 새로운 클립으로 저장합니다.
     
@@ -117,17 +118,25 @@ def detect_pdp(video_path, save_path="output_clips", threshold=0.2, area_ratio=0
     :param max_flicker_hz: 최대 깜빡임 주파수 (초당 몇 번)
     """
 
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_duration = 1.0 / fps
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap = cv2.VideoCapture(video_path) #영상 스트림 open
+    fps = cap.get(cv2.CAP_PROP_FPS) #1초에 몇 프레임으로 구성되어 있는지 반환
+    print(f"이 영상의 프레임 속도는 {fps} FPS입니다.")
+
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) #전체 프레임 수수
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_area = width * height
 
     # 초기화
     prev_luminance = None
-    flicker_frames = []
+    flicker_frames = [] #가이드라인에 해당하는 프레임 번호를 담음
+    result = [] #모든 프레임 결과를 담음
+
+    # 저장 폴더가 없으면 생성
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    output_file = os.path.join(save_path, "flicker_results.csv")
 
     for idx in range(frame_count):
         ret, frame = cap.read()
@@ -137,15 +146,28 @@ def detect_pdp(video_path, save_path="output_clips", threshold=0.2, area_ratio=0
         luminance = calculate_luminance(frame)
 
         if prev_luminance is not None:
-            diff = calculate_luminance_diff(luminance, prev_luminance)
+            diff = calculate_luminance_diff(luminance, prev_luminance) #휘도 차이 계산
+            flicker_detected = check_area_ratio(diff, prev_luminance, threshold, frame.shape[0] * frame.shape[1], area_ratio) #일정 비율을 넘는지 계산
+            result.append((idx, flicker_detected))
             if check_area_ratio(diff, prev_luminance, threshold, total_area, area_ratio):
                 flicker_frames.append(idx)
+
+            frame_filename = os.path.join(save_path, f"frame_{idx}.jpg")
+            cv2.imwrite(frame_filename, frame)
 
         prev_luminance = luminance
 
     cap.release()
 
-    # 깜빡임 구간 탐지
+    with open(output_file, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Frame Number', 'Flicker Detected'])  # 헤더 작성
+        writer.writerows(result)  # 결과 데이터 작성
+
+    print(f"결과가 {output_file}에 저장되었습니다.")
+    print(f"모든 프레임 이미지가 {save_path}에 저장되었습니다.")
+
+    # 깜빡임 구간 탐지 (그룹화)
     clip_ranges = detect_flickering(flicker_frames, fps, min_flicker_hz, max_flicker_hz)
 
     # 결과 클립 저장
@@ -156,8 +178,8 @@ def detect_pdp(video_path, save_path="output_clips", threshold=0.2, area_ratio=0
 
 def main():
     # 영상 파일 경로
-    video_path = r"C:\nova\meta\1_subway.mp4"  # 경로 지정
-    detect_pdp(video_path)
+    video_path = r"C:\kimjs\nova_guideline\meta\17_flickering_light.mp4"  # 경로 지정
+    detect_pdp(video_path, "output_flickering_light")
 
 if __name__ == "__main__":
     main()
